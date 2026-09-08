@@ -4,5 +4,5 @@ Manage this repository with the [Vercel Skills CLI](https://github.com/vercel-la
 
 Install skills:
 ```sh
-npx skills add zerolfl/myskills.git -g  # interactive install
+npx skills add zerolfl/skills -g  # interactive install
 ```
