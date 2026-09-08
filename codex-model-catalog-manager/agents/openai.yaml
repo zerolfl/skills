@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Model Catalog Manager"
+  short_description: "Merge bundled and custom Codex model metadata"
+  default_prompt: "Use $codex-model-catalog-manager to add or update a custom Codex model catalog."
