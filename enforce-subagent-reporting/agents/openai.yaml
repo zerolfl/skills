@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enforce Subagent Reporting"
+  short_description: "Enforce reporting and file evidence rules"
+  default_prompt: "Use $enforce-subagent-reporting to adjust this subagent instruction so it preserves its role while enforcing my status-line, one-shot final-response, and file:line evidence requirements."
