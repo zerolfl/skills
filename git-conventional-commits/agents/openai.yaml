@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Conventional Commits"
+  short_description: "Generate and review Conventional Commit messages"
+  default_prompt: "Use $git-conventional-commits to generate a commit message from the staged changes."
