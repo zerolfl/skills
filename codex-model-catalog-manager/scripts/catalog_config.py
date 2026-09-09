@@ -17,12 +17,15 @@ CODEX_HOME = Path.home() / ".codex"
 DEFAULT_CACHE_LATEST = "models_cache_latest.json"
 DEFAULT_CATALOG_OUTPUT = "models_catalog.json"
 POLICY_CHOICES = ("v1", "custom-v1", "preserve")
+CUSTOM_SEARCH_TOOL_POLICY_CHOICES = ("false", "preserve")
+DEFAULT_CUSTOM_SEARCH_TOOL_POLICY = "preserve"
 REQUIRED_KEYS = {
     "CODEX_CACHE_LATEST",
     "CODEX_CUSTOM_LIST",
     "CODEX_CATALOG_OUTPUT",
     "CODEX_MULTI_AGENT_POLICY",
 }
+CONFIG_KEYS = REQUIRED_KEYS | {"CODEX_CUSTOM_SEARCH_TOOL_POLICY"}
 
 
 def _config_path(value: Any, field: str) -> Path:
@@ -61,7 +64,7 @@ def validate_config(value: Any) -> JsonObject:
     missing = sorted(REQUIRED_KEYS - set(value))
     if missing:
         raise ValueError("config.json is missing: " + ", ".join(missing))
-    unknown = sorted(set(value) - REQUIRED_KEYS)
+    unknown = sorted(set(value) - CONFIG_KEYS)
     if unknown:
         raise ValueError("config.json has unknown keys: " + ", ".join(unknown))
 
@@ -79,6 +82,16 @@ def validate_config(value: Any) -> JsonObject:
         raise ValueError(
             "CODEX_MULTI_AGENT_POLICY must be one of: "
             + ", ".join(POLICY_CHOICES)
+        )
+    custom_search_tool_policy = value.get(
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY", DEFAULT_CUSTOM_SEARCH_TOOL_POLICY
+    )
+    if custom_search_tool_policy is False:
+        custom_search_tool_policy = "false"
+    if custom_search_tool_policy not in CUSTOM_SEARCH_TOOL_POLICY_CHOICES:
+        raise ValueError(
+            "CODEX_CUSTOM_SEARCH_TOOL_POLICY must be one of: "
+            + ", ".join(CUSTOM_SEARCH_TOOL_POLICY_CHOICES)
         )
 
     custom_list: list[str] = []
@@ -109,6 +122,7 @@ def validate_config(value: Any) -> JsonObject:
         "CODEX_CUSTOM_LIST": custom_list,
         "CODEX_CATALOG_OUTPUT": output_name,
         "CODEX_MULTI_AGENT_POLICY": policy,
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": custom_search_tool_policy,
     }
 
 

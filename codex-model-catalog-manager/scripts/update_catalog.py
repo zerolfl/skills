@@ -21,6 +21,7 @@ from catalog_config import (
     CONFIG_PATH,
     CONFIG_HOME,
     CODEX_HOME,
+    CUSTOM_SEARCH_TOOL_POLICY_CHOICES,
     POLICY_CHOICES,
     custom_source_key,
     load_config,
@@ -37,7 +38,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Merge current Codex bundled models with third-party models, "
-            "apply the selected multi-agent policy, and normalize custom priorities."
+            "apply the selected multi-agent and custom search-tool policies, "
+            "and normalize custom priorities."
         )
     )
     parser.add_argument(
@@ -74,6 +76,20 @@ def parse_args() -> argparse.Namespace:
             "without adding the field where it is absent; 'custom-v1' rewrites "
             "existing values to v1 only in custom entries; 'preserve' keeps "
             "each source value unchanged."
+        ),
+    )
+    parser.add_argument(
+        "--custom-search-tool-policy",
+        choices=CUSTOM_SEARCH_TOOL_POLICY_CHOICES,
+        help=(
+            "Override CODEX_CUSTOM_SEARCH_TOOL_POLICY. 'false' sets "
+            "supports_search_tool to false on every custom entry, adding the "
+            "field where it is absent, so V1 subagent and MCP tools are "
+            "injected directly. With 'true', those tools normally require "
+            "tool_search discovery, which some third-party models may not "
+            "trigger. 'false' is recommended for custom models. V2 subagent "
+            "tool exposure is unchanged. 'preserve' keeps each custom value "
+            "unchanged. Bundled entries are never modified."
         ),
     )
     parser.add_argument(
@@ -183,10 +199,24 @@ def apply_multi_agent_policy(
     return normalized
 
 
+def apply_custom_search_tool_policy(
+    models: list[Any], policy: str
+) -> list[JsonObject]:
+    if policy not in CUSTOM_SEARCH_TOOL_POLICY_CHOICES:
+        raise ValueError(f"unsupported custom search-tool policy: {policy}")
+    normalized = copy.deepcopy(models)
+    if policy == "false":
+        for model in normalized:
+            if isinstance(model, dict):
+                model["supports_search_tool"] = False
+    return normalized
+
+
 def merge_catalog(
     bundled: JsonObject,
     custom_sources: list[tuple[Path, JsonObject]],
     multi_agent_policy: str,
+    custom_search_tool_policy: str,
 ) -> JsonObject:
     bundled_models = apply_multi_agent_policy(
         bundled["models"], multi_agent_policy, source="bundled"
@@ -197,6 +227,9 @@ def merge_catalog(
     for source_path, source in custom_sources:
         source_models = apply_multi_agent_policy(
             source["models"], multi_agent_policy, source="custom"
+        )
+        source_models = apply_custom_search_tool_policy(
+            source_models, custom_search_tool_policy
         )
         source_map = validate_custom_models(source_models)
         conflicts = sorted(set(bundled_by_slug) & set(source_map))
@@ -472,13 +505,17 @@ def main() -> int:
         if args.models_output is not None:
             output = args.models_output.resolve()
         policy = args.multi_agent_policy or config["CODEX_MULTI_AGENT_POLICY"]
+        custom_search_tool_policy = (
+            args.custom_search_tool_policy
+            or config["CODEX_CUSTOM_SEARCH_TOOL_POLICY"]
+        )
         bundled, version, fetched_at = load_models_cache(snapshot_path)
         custom_sources = [
             (path, load_json(path)) for path in custom_paths
         ]
         previous = read_previous(output)
         merged = merge_catalog(
-            bundled, custom_sources, policy
+            bundled, custom_sources, policy, custom_search_tool_policy
         )
         generated = {
             "fetched_at": fetched_at,
@@ -516,6 +553,7 @@ def main() -> int:
             "generated_at": diff["generated_at"],
             "client_version": version,
             "multi_agent_policy": policy,
+            "custom_search_tool_policy": custom_search_tool_policy,
             "bundled_slugs": list(model_map(bundled["models"], "bundled")),
             "custom_slugs": custom_slugs_by_source,
             "custom_sources": [path.name for path in custom_paths],

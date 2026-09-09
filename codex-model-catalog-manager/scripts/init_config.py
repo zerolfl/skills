@@ -11,8 +11,10 @@ from typing import Callable
 
 from catalog_config import (
     CONFIG_PATH,
+    CUSTOM_SEARCH_TOOL_POLICY_CHOICES,
     DEFAULT_CACHE_LATEST,
     DEFAULT_CATALOG_OUTPUT,
+    DEFAULT_CUSTOM_SEARCH_TOOL_POLICY,
     POLICY_CHOICES,
     write_config,
 )
@@ -183,12 +185,18 @@ def collect_config(
         "CODEX_CUSTOM_LIST",
         "CODEX_CATALOG_OUTPUT",
         "CODEX_MULTI_AGENT_POLICY",
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY",
     )
     defaults: dict[str, object] = {
         "CODEX_CACHE_LATEST": DEFAULT_CACHE_LATEST,
         "CODEX_CUSTOM_LIST": ["models_custom.json"],
         "CODEX_CATALOG_OUTPUT": DEFAULT_CATALOG_OUTPUT,
         "CODEX_MULTI_AGENT_POLICY": None,
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": DEFAULT_CUSTOM_SEARCH_TOOL_POLICY,
+    }
+    policy_choices = {
+        "CODEX_MULTI_AGENT_POLICY": POLICY_CHOICES,
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": CUSTOM_SEARCH_TOOL_POLICY_CHOICES,
     }
     index = 0
     history: list[int] = []
@@ -205,6 +213,11 @@ def collect_config(
                 )
             else:
                 existing = config.get(key)
+                if (
+                    key == "CODEX_CUSTOM_SEARCH_TOOL_POLICY"
+                    and existing is False
+                ):
+                    existing = "false"
                 if not isinstance(existing, str):
                     existing = None
                 fallback = existing
@@ -216,10 +229,13 @@ def collect_config(
                         "CODEX_CACHE_LATEST": "bundled baseline filename",
                         "CODEX_CATALOG_OUTPUT": "generated catalog filename",
                         "CODEX_MULTI_AGENT_POLICY": "v1, custom-v1, or preserve",
+                        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": (
+                            "false or preserve"
+                        ),
                     }[key],
                     variable_name=key,
                     current=fallback,
-                    choices=POLICY_CHOICES if key == "CODEX_MULTI_AGENT_POLICY" else None,
+                    choices=policy_choices.get(key),
                     required=True,
                     input_fn=input_fn,
                 )
