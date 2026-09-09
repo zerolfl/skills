@@ -71,7 +71,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Override CODEX_MULTI_AGENT_POLICY. 'v1' rewrites "
             "existing values to v1 in both bundled and custom entries "
-            "without adding the field where it is absent; 'preserve' keeps "
+            "without adding the field where it is absent; 'custom-v1' rewrites "
+            "existing values to v1 only in custom entries; 'preserve' keeps "
             "each source value unchanged."
         ),
     )
@@ -167,12 +168,15 @@ def validate_custom_models(models: list[Any]) -> dict[str, JsonObject]:
 
 
 def apply_multi_agent_policy(
-    models: list[Any], policy: str
+    models: list[Any], policy: str, *, source: str
 ) -> list[JsonObject]:
-    if policy not in ("v1", "preserve"):
+    if policy not in POLICY_CHOICES:
         raise ValueError(f"unsupported multi-agent policy: {policy}")
     normalized = copy.deepcopy(models)
-    if policy == "v1":
+    rewrite_to_v1 = policy == "v1" or (
+        policy == "custom-v1" and source == "custom"
+    )
+    if rewrite_to_v1:
         for model in normalized:
             if isinstance(model, dict) and "multi_agent_version" in model:
                 model["multi_agent_version"] = "v1"
@@ -185,14 +189,14 @@ def merge_catalog(
     multi_agent_policy: str,
 ) -> JsonObject:
     bundled_models = apply_multi_agent_policy(
-        bundled["models"], multi_agent_policy
+        bundled["models"], multi_agent_policy, source="bundled"
     )
     bundled_by_slug = model_map(bundled_models, "bundled")
     custom_models: list[JsonObject] = []
     custom_by_slug: dict[str, JsonObject] = {}
     for source_path, source in custom_sources:
         source_models = apply_multi_agent_policy(
-            source["models"], multi_agent_policy
+            source["models"], multi_agent_policy, source="custom"
         )
         source_map = validate_custom_models(source_models)
         conflicts = sorted(set(bundled_by_slug) & set(source_map))

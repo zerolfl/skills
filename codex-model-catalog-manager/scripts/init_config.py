@@ -215,7 +215,7 @@ def collect_config(
                     {
                         "CODEX_CACHE_LATEST": "bundled baseline filename",
                         "CODEX_CATALOG_OUTPUT": "generated catalog filename",
-                        "CODEX_MULTI_AGENT_POLICY": "v1 or preserve",
+                        "CODEX_MULTI_AGENT_POLICY": "v1, custom-v1, or preserve",
                     }[key],
                     variable_name=key,
                     current=fallback,

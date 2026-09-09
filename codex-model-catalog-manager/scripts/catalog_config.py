@@ -16,7 +16,7 @@ CONFIG_PATH = CONFIG_HOME / "config.json"
 CODEX_HOME = Path.home() / ".codex"
 DEFAULT_CACHE_LATEST = "models_cache_latest.json"
 DEFAULT_CATALOG_OUTPUT = "models_catalog.json"
-POLICY_CHOICES = ("v1", "preserve")
+POLICY_CHOICES = ("v1", "custom-v1", "preserve")
 REQUIRED_KEYS = {
     "CODEX_CACHE_LATEST",
     "CODEX_CUSTOM_LIST",
