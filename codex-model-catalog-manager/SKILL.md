@@ -5,7 +5,7 @@ description: Create, update, validate, and diff a Codex model_catalog_json that 
 
 # Codex Model Catalog Manager
 
-Read `~/.config/codex-model-catalog-manager/config.json` before doing any work. If it is missing, stop and tell the user to run `python scripts/init_config.py` from the skill directory. The script prompts for each setting; press Esc to return to the previous setting. It prints a configuration summary and writes the file only after confirmation. Re-run it to update existing settings. Example:
+Read `~/.config/codex-model-catalog-manager/config.json` before doing any work. Compare its keys with the current settings below. If the file is missing or any current setting is absent, stop and tell the user to run `python scripts/init_config.py` from the skill directory. Report the missing settings with their allowed values and reasons. The script prompts for each setting; press Esc to return to the previous setting. It prints a configuration summary and writes the file only after confirmation. Re-run it to update existing settings. Example:
 
 ```json
 {
@@ -24,9 +24,7 @@ Read `~/.config/codex-model-catalog-manager/config.json` before doing any work. 
 - `CODEX_CUSTOM_LIST`: custom model sources, merged in list order.
 - `CODEX_CATALOG_OUTPUT`: generated merged catalog output.
 - `CODEX_MULTI_AGENT_POLICY`: `v1`, `custom-v1`, or `preserve`, controlling `multi_agent_version` during merge.
-- `CODEX_CUSTOM_SEARCH_TOOL_POLICY`: `false` or `preserve`, controlling `supports_search_tool` on custom entries during merge. Existing configs that omit this key are treated as `preserve`.
-
-`false` sets `supports_search_tool` to `false` on every custom entry, adding the field where it is absent, while bundled entries remain unchanged. With `false`, V1 subagent tools and MCP tools are injected directly. With `true`, those tools are normally discovered through `tool_search`; some third-party models may not invoke that deferred discovery path, causing V1 subagent and MCP tools to fail. Therefore `false` is recommended for custom third-party models. It does not change how V2 subagent tools are exposed and does not disable web search. `preserve` keeps every custom value unchanged.
+- `CODEX_CUSTOM_SEARCH_TOOL_POLICY`: `false` or `preserve`, controlling `supports_search_tool` on custom entries during merge. Use `false` for custom third-party models.
 
 `CODEX_CACHE_LATEST`, every `CODEX_CUSTOM_LIST` entry, and `CODEX_CATALOG_OUTPUT` may be relative to `~/.codex/` or absolute paths. Relative paths cannot contain `..`. `models_cache.json` is Codex's own login cache; never use or overwrite it. Before each capture, back up the existing baseline to `~/.config/codex-model-catalog-manager/<CODEX_CACHE_LATEST>.bak`.
 
@@ -40,7 +38,7 @@ This skill only writes `CODEX_CATALOG_OUTPUT`. Do not modify `config.toml`, `mod
 
 ## Workflow
 
-1. Check `~/.config/codex-model-catalog-manager/config.json`. If it is missing, stop and tell the user to run `python scripts/init_config.py` from the skill directory. The script prompts for each setting; press Esc to return to the previous setting. It prints a configuration summary and writes the file only after confirmation. Re-run it to update existing settings.
+1. Check `~/.config/codex-model-catalog-manager/config.json` against the current settings list above. If it is missing or incomplete, stop and tell the user to run `python scripts/init_config.py` from the skill directory. Report the missing settings, allowed values, and reasons. The script prompts for each setting; press Esc to return to the previous setting. It prints a configuration summary and writes the file only after confirmation. Re-run it to update existing settings.
 2. Run `codex --version` with elevated privileges and retain the version number only. Then pipe `codex debug models --bundled` into `python scripts/prepare_bundled_cache.py --client-version <version-number-only>` with elevated privileges. The script validates the capture, backs up an existing baseline, and atomically writes the configured `CODEX_CACHE_LATEST` with `fetched_at` and version-only `client_version`. If the Codex CLI is not found, stop and tell the user to install it. The merge script refuses a cache missing either metadata field.
 3. Check the configured custom sources and output path. The merge script requires the prepared cache from step 2 to exist; it does not fetch bundled models. If only an old merged catalog exists, separate third-party entries before generating. Entries absent from both the current bundled slugs and an existing state file under `~/.config/codex-model-catalog-manager/` are ambiguous; ask before classifying or deleting them.
 4. For additions or metadata updates, start from [assets/custom-models.example.json](assets/custom-models.example.json), then replace values supported by current vendor documentation. Validate schema and field semantics against the Codex source for the installed CLI version. If the user has not provided a source location, inspect the official repository at https://github.com/openai/codex. Validate that each custom JSON contains only third-party entries and satisfies the required fields before merging.
@@ -57,7 +55,7 @@ During merging:
   - `custom-v1` rewrites existing `multi_agent_version` values to `"v1"` only in custom entries; bundled cache entries remain unchanged. It does not add the field to entries that omit it.
   - `preserve` keeps each source file's values unchanged.
 - `--custom-search-tool-policy` controls `supports_search_tool` on custom entries only:
-  - `false` sets it to `false` on every custom entry, adding the field where absent. V1 subagent and MCP tools are then injected directly. With `true`, they normally require `tool_search` discovery, which some third-party models may not trigger; `false` is recommended. V2 subagent tool exposure is unchanged.
+  - `false` sets it to `false` on every custom entry, adding the field where absent.
   - `preserve` keeps each custom source value unchanged.
 - The merge concatenates custom sources in `CODEX_CUSTOM_LIST` order and reassigns custom `priority` values to `1000`, `1001`, ... in that merged order. Reorder the list or the custom arrays to change custom ordering.
 - Neither policy modifies the source bundled or custom files.

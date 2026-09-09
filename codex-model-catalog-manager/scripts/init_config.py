@@ -10,18 +10,25 @@ from pathlib import Path
 from typing import Callable
 
 from catalog_config import (
+    CONFIG_KEY_ORDER,
     CONFIG_PATH,
     CUSTOM_SEARCH_TOOL_POLICY_CHOICES,
     DEFAULT_CACHE_LATEST,
     DEFAULT_CATALOG_OUTPUT,
-    DEFAULT_CUSTOM_SEARCH_TOOL_POLICY,
     POLICY_CHOICES,
+    RECOMMENDED_CUSTOM_SEARCH_TOOL_POLICY,
+    missing_config_keys,
+    missing_config_help,
     write_config,
 )
 
 
 InputFunction = Callable[[str], str]
 BACK_VALUE = "\x1b"
+YELLOW = "\x1b[33m"
+BRIGHT_CYAN = "\x1b[96m"
+GRAY = "\x1b[90m"
+RESET = "\x1b[0m"
 
 
 class BackRequested(Exception):
@@ -107,10 +114,29 @@ def _append_character(characters: list[str], character: str) -> None:
         print(character, end="", flush=True)
 
 
+def _yellow(text: str) -> str:
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"{YELLOW}{text}{RESET}"
+
+
+def _bright_cyan(text: str) -> str:
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"{BRIGHT_CYAN}{text}{RESET}"
+
+
+def _gray(text: str) -> str:
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"{GRAY}{text}{RESET}"
+
+
 def _prompt(
     label: str,
     *,
     variable_name: str,
+    highlight: bool = False,
     current: str | None = None,
     default: str | None = None,
     choices: tuple[str, ...] | None = None,
@@ -130,7 +156,8 @@ def _prompt(
             suffix = f" [{fallback}]"
         else:
             suffix = ""
-        prompt = f"{variable_name} ({label}){suffix}: "
+        name = _yellow(variable_name) if highlight else variable_name
+        prompt = f"{name} ({label}){suffix}: "
         value = (input_fn(prompt) if input_fn else _read_console(prompt)).strip()
         if value == BACK_VALUE:
             raise BackRequested
@@ -146,11 +173,13 @@ def _prompt(
 def _prompt_custom_list(
     current: list[str],
     *,
+    highlight: bool = False,
     input_fn: InputFunction | None = None,
 ) -> list[str]:
     rendered = ", ".join(current) if current else "none"
+    name = _yellow("CODEX_CUSTOM_LIST") if highlight else "CODEX_CUSTOM_LIST"
     prompt = (
-        "CODEX_CUSTOM_LIST (custom model JSON paths in merge order, "
+        f"{name} (custom model JSON paths in merge order, "
         f"comma-separated; enter 'none' for none) [{rendered}]: "
     )
     value = (input_fn(prompt) if input_fn else _read_console(prompt)).strip()
@@ -179,20 +208,15 @@ def collect_config(
     input_fn: InputFunction | None = None,
 ) -> dict[str, object]:
     """Prompt for each setting, allowing Esc to return to the previous one."""
+    missing = set(missing_config_keys(current or {}))
     config = dict(current or {})
-    keys = (
-        "CODEX_CACHE_LATEST",
-        "CODEX_CUSTOM_LIST",
-        "CODEX_CATALOG_OUTPUT",
-        "CODEX_MULTI_AGENT_POLICY",
-        "CODEX_CUSTOM_SEARCH_TOOL_POLICY",
-    )
+    keys = CONFIG_KEY_ORDER
     defaults: dict[str, object] = {
         "CODEX_CACHE_LATEST": DEFAULT_CACHE_LATEST,
         "CODEX_CUSTOM_LIST": ["models_custom.json"],
         "CODEX_CATALOG_OUTPUT": DEFAULT_CATALOG_OUTPUT,
         "CODEX_MULTI_AGENT_POLICY": None,
-        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": DEFAULT_CUSTOM_SEARCH_TOOL_POLICY,
+        "CODEX_CUSTOM_SEARCH_TOOL_POLICY": RECOMMENDED_CUSTOM_SEARCH_TOOL_POLICY,
     }
     policy_choices = {
         "CODEX_MULTI_AGENT_POLICY": POLICY_CHOICES,
@@ -209,6 +233,7 @@ def collect_config(
                     existing = defaults[key]
                 value = _prompt_custom_list(
                     [str(item) for item in existing],
+                    highlight=key in missing,
                     input_fn=input_fn,
                 )
             else:
@@ -234,6 +259,7 @@ def collect_config(
                         ),
                     }[key],
                     variable_name=key,
+                    highlight=key in missing,
                     current=fallback,
                     choices=policy_choices.get(key),
                     required=True,
@@ -254,7 +280,7 @@ def collect_config(
 
 def _confirm(input_fn: InputFunction | None = None) -> bool:
     while True:
-        prompt = "Save this configuration? [y/N]: "
+        prompt = _bright_cyan("Save this configuration? [y/N]: ")
         value = (input_fn(prompt) if input_fn else _read_console(prompt)).strip().lower()
         if value in {"y", "yes"}:
             return True
@@ -278,17 +304,37 @@ def configure(
 ) -> int:
     """Run the interactive configuration workflow."""
     print(f"Configure codex-model-catalog-manager and save to {_display_path(path)}.")
-    print("Press Esc to return to the previous setting.")
+    print(
+        _gray(
+            "Esc: return to the previous setting. "
+            "Enter: keep the current/default value. Ctrl+C: exit."
+        )
+    )
     print()
     if path.is_file():
         current = _load_existing(path)
-        print("Existing configuration loaded. Press Enter to keep each current value.")
+        missing = missing_config_keys(current)
+        if missing:
+            print(_yellow("Missing settings detected: " + ", ".join(missing)))
+            print(missing_config_help(missing))
+            print()
+            print(
+                "Set each missing setting explicitly. Do not rely on defaults "
+                "from older skill versions."
+            )
+            print()
+        else:
+            print(
+                "Existing configuration loaded. Press Enter to keep each "
+                "current value."
+            )
     else:
         current = {}
     while True:
         config = collect_config(current, input_fn=input_fn)
         print("\nConfiguration summary:")
         print(json.dumps(config, ensure_ascii=False, indent=2))
+        print()
         if _confirm(input_fn):
             write_config(config, path, force=True)
             print(f"Configuration saved to {path}")

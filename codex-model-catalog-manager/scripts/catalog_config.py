@@ -18,14 +18,49 @@ DEFAULT_CACHE_LATEST = "models_cache_latest.json"
 DEFAULT_CATALOG_OUTPUT = "models_catalog.json"
 POLICY_CHOICES = ("v1", "custom-v1", "preserve")
 CUSTOM_SEARCH_TOOL_POLICY_CHOICES = ("false", "preserve")
-DEFAULT_CUSTOM_SEARCH_TOOL_POLICY = "preserve"
-REQUIRED_KEYS = {
+RECOMMENDED_CUSTOM_SEARCH_TOOL_POLICY = "false"
+CONFIG_KEY_ORDER = (
     "CODEX_CACHE_LATEST",
     "CODEX_CUSTOM_LIST",
     "CODEX_CATALOG_OUTPUT",
     "CODEX_MULTI_AGENT_POLICY",
+    "CODEX_CUSTOM_SEARCH_TOOL_POLICY",
+)
+REQUIRED_KEYS = set(CONFIG_KEY_ORDER)
+CONFIG_KEYS = set(CONFIG_KEY_ORDER)
+CONFIG_KEY_HELP = {
+    "CODEX_CACHE_LATEST": (
+        "values: a filename relative to ~/.codex or an absolute path; "
+        "reason: defines the bundled baseline used by the merge"
+    ),
+    "CODEX_CUSTOM_LIST": (
+        "values: a JSON array of filenames relative to ~/.codex or absolute "
+        "paths; reason: defines the custom model sources and their merge order"
+    ),
+    "CODEX_CATALOG_OUTPUT": (
+        "values: a filename relative to ~/.codex or an absolute path; "
+        "reason: defines the generated catalog written by the skill"
+    ),
+    "CODEX_MULTI_AGENT_POLICY": (
+        "values: v1, custom-v1, preserve; reason: controls multi_agent_version "
+        "during merge"
+    ),
+    "CODEX_CUSTOM_SEARCH_TOOL_POLICY": (
+        "values: false, preserve; recommended: false; reason: false injects "
+        "V1 subagent and MCP tools directly, while tool_search deferred "
+        "discovery may fail with some third-party models"
+    ),
 }
-CONFIG_KEYS = REQUIRED_KEYS | {"CODEX_CUSTOM_SEARCH_TOOL_POLICY"}
+
+
+def missing_config_keys(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return list(CONFIG_KEY_ORDER)
+    return [key for key in CONFIG_KEY_ORDER if key not in value]
+
+
+def missing_config_help(keys: list[str]) -> str:
+    return "\n".join(f"- {key}: {CONFIG_KEY_HELP[key]}" for key in keys)
 
 
 def _config_path(value: Any, field: str) -> Path:
@@ -61,9 +96,16 @@ def _normalize_config_path(value: Any, field: str) -> str:
 def validate_config(value: Any) -> JsonObject:
     if not isinstance(value, dict):
         raise ValueError("config.json must contain a JSON object")
-    missing = sorted(REQUIRED_KEYS - set(value))
+    missing = missing_config_keys(value)
     if missing:
-        raise ValueError("config.json is missing: " + ", ".join(missing))
+        raise ValueError(
+            "config.json is missing required settings: "
+            + ", ".join(missing)
+            + "\n"
+            + missing_config_help(missing)
+            + "\nRun `python scripts/init_config.py` from the skill directory "
+            "and set them explicitly."
+        )
     unknown = sorted(set(value) - CONFIG_KEYS)
     if unknown:
         raise ValueError("config.json has unknown keys: " + ", ".join(unknown))
@@ -83,9 +125,7 @@ def validate_config(value: Any) -> JsonObject:
             "CODEX_MULTI_AGENT_POLICY must be one of: "
             + ", ".join(POLICY_CHOICES)
         )
-    custom_search_tool_policy = value.get(
-        "CODEX_CUSTOM_SEARCH_TOOL_POLICY", DEFAULT_CUSTOM_SEARCH_TOOL_POLICY
-    )
+    custom_search_tool_policy = value["CODEX_CUSTOM_SEARCH_TOOL_POLICY"]
     if custom_search_tool_policy is False:
         custom_search_tool_policy = "false"
     if custom_search_tool_policy not in CUSTOM_SEARCH_TOOL_POLICY_CHOICES:
